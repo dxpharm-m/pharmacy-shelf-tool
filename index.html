@@ -372,25 +372,47 @@ function doPrint(rows,order){
     }
 
     if(nc===1){
-      // 1段：そのままテーブル（改ページはCSS page-break-inside:avoidに任せる）
       return`<table class="dt">${cg}${headHtml}<tbody>${rowArr.map(makeRow).join('')}</tbody></table>`;
     }
 
-    // 段組み：1ページ = nc段 × rowsPerPage行
-    // 各ページをdiv.pgブロックで分割し、印刷時にpage-break-before:alwaysを適用
-    const totalPages=Math.ceil(rowArr.length/(rowsPerPage*nc));
-    let html='';
-    for(let p=0;p<totalPages;p++){
-      const segTds=[];
-      for(let c=0;c<nc;c++){
-        const start2=(p*nc+c)*rowsPerPage;
-        const seg=rowArr.slice(start2,start2+rowsPerPage);
-        const trs=seg.map(makeRow).join('');
-        const border=c>0?'border-left:5px solid #f4f4f4;':'';
-        segTds.push(`<td style="vertical-align:top;padding:0;${border}width:${100/nc}%;"><table class="dt" style="width:100%;">${cg}${headHtml}<tbody>${trs}</tbody></table></td>`);
+    // ページ単位段組み
+    // 1ページ = nc段 × rowsPerPage行
+    // 例）3段・rowsPerPage=20 → 1ページ目:0-19, 20-39, 40-59 / 2ページ目:60-79...
+    const perPage = rowsPerPage * nc;
+    const totalPages = Math.ceil(rowArr.length / perPage);
+    let html = '';
+
+    for(let p = 0; p < totalPages; p++){
+      // このページの先頭インデックス
+      const pageStart = p * perPage;
+      // nc段分のテーブルを横に並べる
+      let segHtml = '';
+      for(let c = 0; c < nc; c++){
+        // この段の行範囲：ページ先頭 + 段番号 × 1段あたり行数
+        const segStart = pageStart + c * rowsPerPage;
+        const seg = rowArr.slice(segStart, segStart + rowsPerPage);
+        if(seg.length === 0){ 
+          // 空の段：幅だけ確保
+          segHtml += `<td style="width:${100/nc}%;vertical-align:top;padding:0;${c>0?'border-left:5px solid #f4f4f4;':''}"></td>`;
+          continue;
+        }
+        const trs = seg.map(makeRow).join('');
+        segHtml += `<td style="width:${100/nc}%;vertical-align:top;padding:0;${c>0?'border-left:5px solid #f4f4f4;':''}">
+          <table class="dt" style="width:100%;">${cg}${headHtml}<tbody>${trs}</tbody></table>
+        </td>`;
       }
-      // p>0 のページは pg クラスで改ページ
-      html+=`<div class="${p>0?'pg':''}"><table style="width:100%;border-collapse:collapse;table-layout:fixed;"><tbody><tr>${segTds.join('')}</tr></tbody></table></div>`;
+
+      // 2ページ目以降はdivをdisplay:blockにして印刷時に確実に改ページ
+      // position:relativeとoverflow:hiddenで高さを固定し、次ページへはみ出させない
+      const pageStyle = p > 0
+        ? `display:block;page-break-before:always;break-before:page;`
+        : `display:block;`;
+
+      html += `<div style="${pageStyle}">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;">
+          <tbody><tr>${segHtml}</tr></tbody>
+        </table>
+      </div>`;
     }
     return html;
   }
@@ -432,7 +454,7 @@ function doPrint(rows,order){
 .cp{white-space:normal;color:#666;font-size:.72em;text-align:center;width:1%;min-width:28pt;max-width:44pt;word-break:break-all;line-height:1.2;}
 .dv{width:5px;background:#f2f2f2;border:none!important;}
 .pb{page-break-before:always;padding-top:${isLand?'10mm':'12mm'}.pg{page-break-before:always;padding-top:${isLand?'10mm':'12mm'};}
-@media print{@page{size:${W} ${H};margin:0;}body{margin:0;}.pb{page-break-before:always;}.dt tbody tr{page-break-inside:avoid;}}
+@media print{@page{size:${W} ${H};margin:0;}body{margin:0;}.pb{page-break-before:always;break-before:page;}.pg{page-break-before:always;break-before:page;}.dt tbody tr{page-break-inside:avoid;}div[style*="page-break-before"]{page-break-before:always;break-before:page;}}
 </style></head><body>
 <div class="cover"><div class="ct"></div><div class="cb"></div><div class="cs2"></div>
 <div class="cen"><div class="csub">PHARMACY SHELF LIST</div><div class="ctitle">棚　表</div><div class="cbar"></div><div class="cph">${ph||'&nbsp;'}</div><div class="cdate">作成日：${today}</div><div class="ccount">収載医薬品数：${drugCount}品目</div></div></div>
