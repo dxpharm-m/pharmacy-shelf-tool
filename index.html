@@ -349,10 +349,14 @@ function doPrint(rows,order){
   const W=(isLand?ph2:pw)+'mm', H=(isLand?pw:ph2)+'mm';
   const aLight=acc+'1A';
 
-  // 1ページあたり行数推定（本文エリア高さ÷1行高さ）
-  const bodyH=(isLand?pw:ph2)-24;
-  const rowH=nc>=3?4.0:nc>=2?4.5:5.2;
-  const rowsPerPage=Math.max(5,Math.floor(bodyH/rowH));
+  // 行高さ固定（px）
+  // 96dpi基準: 1mm≒3.78px。段数が多いほど文字小さく行も詰める
+  const ROW_H = nc>=3 ? 16 : nc>=2 ? 18 : 20;   // 1行の高さ(px)
+  const HEADER_H = 24;                             // theadの高さ(px)
+  // 本文エリア高さ(mm→px変換)から1ページあたり行数を計算
+  const bodyH_mm = (isLand ? pw : ph2) - 24;      // 上下余白を除いた高さ(mm)
+  const bodyH_px = bodyH_mm * 3.7795;             // mm→px
+  const rowsPerPage = Math.max(5, Math.floor(bodyH_px / ROW_H));
 
   // ユニーク医薬品数（棚番号展開前：nameで重複除去）
   const drugCount=new Set(rows.map(r=>r.name)).size;
@@ -366,20 +370,25 @@ function doPrint(rows,order){
     const hs=isShelf?['棚番号','医薬品名','包装単位']:['医薬品名','包装単位','棚番号'];
     const headHtml=`<thead><tr>${hs.map(h=>`<th>${h}</th>`).join('')}</tr></thead>`;
 
+    // 行高さ固定（ROW_H px = 印刷時の1行の高さ）
+    // overflow:hiddenで折り返しも切り、必ず1行=ROW_H px に収める
     function makeRow(r,i){
       const[c1,c2,c3]=isShelf?[r.sd,r.name,r.pkg]:[r.name,r.pkg,r.sd];
-      return`<tr class="${i%2?'ev':''}"><td class="cs">${c1}</td><td class="cn">${c2}</td><td class="cp">${c3}</td></tr>`;
+      return`<tr style="height:${ROW_H}px;max-height:${ROW_H}px;overflow:hidden;">
+        <td class="cs" style="height:${ROW_H}px;overflow:hidden;">${c1}</td>
+        <td class="cn" style="height:${ROW_H}px;overflow:hidden;">${c2}</td>
+        <td class="cp" style="height:${ROW_H}px;overflow:hidden;">${c3}</td>
+      </tr>`;
     }
 
     if(nc===1){
-      return`<table class="dt">${cg}${headHtml}<tbody>${rowArr.map(makeRow).join('')}</tbody></table>`;
+      return`<table class="dt" style="table-layout:fixed;">${cg}${headHtml}<tbody>${rowArr.map(makeRow).join('')}</tbody></table>`;
     }
 
     // ページ単位段組み
-    // 1ページ = nc段 × rowsPerPage行
     const perPage = rowsPerPage * nc;
     const totalPages = Math.ceil(rowArr.length / perPage);
-    const pages = [];
+    let html = '';
 
     for(let p = 0; p < totalPages; p++){
       const pageStart = p * perPage;
@@ -391,17 +400,18 @@ function doPrint(rows,order){
         const border = c > 0 ? 'border-left:5px solid #f4f4f4;' : '';
         segHtml += `<td style="width:${100/nc}%;vertical-align:top;padding:0;${border}">`;
         if(seg.length > 0){
-          segHtml += `<table class="dt" style="width:100%;">${cg}${headHtml}<tbody>${trs}</tbody></table>`;
+          segHtml += `<table class="dt" style="width:100%;table-layout:fixed;">${cg}${headHtml}<tbody>${trs}</tbody></table>`;
         }
         segHtml += `</td>`;
       }
-      pages.push(
-        `<table style="width:100%;border-collapse:collapse;table-layout:fixed;"><tbody><tr>${segHtml}</tr></tbody></table>`
-      );
-    }
 
-    // ページ間に物理的な改ページdivを挿入（CSSクラスに頼らない）
-    return pages.join(`<div style="page-break-after:always;break-after:page;height:0;overflow:hidden;"></div>`);
+      // ページ高さ固定：HEADER_H(見出し) + ROW_H×rowsPerPage
+      const pageH = HEADER_H + ROW_H * rowsPerPage;
+      html += `<div style="height:${pageH}px;overflow:hidden;${p>0?'page-break-before:always;break-before:page;':''}" class="ppage">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;"><tbody><tr>${segHtml}</tr></tbody></table>
+      </div>`;
+    }
+    return html;
   }
 
   let body='';
@@ -441,7 +451,7 @@ function doPrint(rows,order){
 .cp{white-space:normal;color:#666;font-size:.72em;text-align:center;width:1%;min-width:28pt;max-width:44pt;word-break:break-all;line-height:1.2;}
 .dv{width:5px;background:#f2f2f2;border:none!important;}
 .pb{page-break-before:always;padding-top:${isLand?'10mm':'12mm'}.pg{page-break-before:always;padding-top:${isLand?'10mm':'12mm'};}
-@media print{@page{size:${W} ${H};margin:0;}body{margin:0;}.pb{page-break-before:always;break-before:page;}.pg{page-break-before:always;break-before:page;}.dt tbody tr{page-break-inside:avoid;}div[style*="page-break-before"]{page-break-before:always;break-before:page;}}
+.print-page{width:${W};height:${H};overflow:hidden;display:block;position:relative;}.print-page+.print-page{margin-top:0;}@media print{@page{size:${W} ${H};margin:0;}body{margin:0;}.ppage{page-break-inside:avoid;overflow:hidden;}.ppage+.ppage{page-break-before:always;break-before:page;}.pb{page-break-before:always;break-before:page;}.dt tbody tr{page-break-inside:avoid;}tr{height:${ROW_H}px;max-height:${ROW_H}px;}}
 </style></head><body>
 <div class="cover"><div class="ct"></div><div class="cb"></div><div class="cs2"></div>
 <div class="cen"><div class="csub">PHARMACY SHELF LIST</div><div class="ctitle">棚　表</div><div class="cbar"></div><div class="cph">${ph||'&nbsp;'}</div><div class="cdate">作成日：${today}</div><div class="ccount">収載医薬品数：${drugCount}品目</div></div></div>
