@@ -333,13 +333,29 @@ function doPrint(rows,order){
   const W=isLand?'297mm':'210mm',H=isLand?'210mm':'297mm',aLight=acc+'1A';
   function buildTable(rowArr,isShelf){
     const half=Math.ceil(rowArr.length/nc);
+    // 棚番号・包装単位は内容に合わせた最小幅、医薬品名が残り全部を使う
+    // colgroup: shelf順=[棚番号(固定),医薬品名(auto),包装単位(固定)] / kana順=[医薬品名(auto),包装単位(固定),棚番号(固定)]
+    const fixedCss='white-space:nowrap;width:1%;';
+    const nameCss='width:auto;';
+    const colsShelf=`<colgroup><col style="${fixedCss}"><col style="${nameCss}"><col style="${fixedCss}"></colgroup>`;
+    const colsKana=`<colgroup><col style="${nameCss}"><col style="${fixedCss}"><col style="${fixedCss}"></colgroup>`;
+    const cg=isShelf?colsShelf:colsKana;
     if(nc===1){
       const hs=isShelf?['棚番号','医薬品名','包装単位']:['医薬品名','包装単位','棚番号'];
-      return`<table class="dt"><thead><tr>${hs.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rowArr.map((r,i)=>{const[c1,c2,c3]=isShelf?[r.sd,r.name,r.pkg]:[r.name,r.pkg,r.sd];return`<tr class="${i%2?'ev':''}"><td class="cs">${c1}</td><td class="cn">${c2}</td><td class="cp">${c3}</td></tr>`;}).join('')}</tbody></table>`;
+      return`<table class="dt">${cg}<thead><tr>${hs.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rowArr.map((r,i)=>{const[c1,c2,c3]=isShelf?[r.sd,r.name,r.pkg]:[r.name,r.pkg,r.sd];return`<tr class="${i%2?'ev':''}"><td class="cs">${c1}</td><td class="cn">${c2}</td><td class="cp">${c3}</td></tr>`;}).join('')}</tbody></table>`;
     }
-    let trs='';
-    for(let i=0;i<half;i++){let cells='';for(let c=0;c<nc;c++){const r=rowArr[i+c*half];if(r){const[c1,c2,c3]=isShelf?[r.sd,r.name,r.pkg]:[r.name,r.pkg,r.sd];cells+=`<td class="cs">${c1}</td><td class="cn">${c2}</td><td class="cp">${c3}</td>`;}else{cells+=`<td colspan="3"></td>`;}if(c<nc-1)cells+=`<td class="dv"></td>`;}trs+=`<tr class="${i%2?'ev':''}">${cells}</tr>`;}
-    return`<table class="dt multi"><tbody>${trs}</tbody></table>`;
+    // 段組み：各段にcolgroupを入れてテーブルを段数分横に並べる
+    // table-layout:fixedを避けてautoにし、医薬品名セルにwidth:100%相当を持たせる
+    const segTables=[];
+    for(let c=0;c<nc;c++){
+      const seg=rowArr.slice(c*half,(c+1)*half);
+      const trs=seg.map((r,i)=>{
+        const[c1,c2,c3]=isShelf?[r.sd,r.name,r.pkg]:[r.name,r.pkg,r.sd];
+        return`<tr class="${i%2?'ev':''}"><td class="cs">${c1}</td><td class="cn">${c2}</td><td class="cp">${c3}</td></tr>`;
+      }).join('');
+      segTables.push(`<td style="vertical-align:top;padding:0;${c>0?'border-left:4px solid #f0f0f0;':''}" ><table class="dt" style="width:100%;">${cg}<tbody>${trs}</tbody></table></td>`);
+    }
+    return`<table style="width:100%;border-collapse:collapse;"><tbody><tr>${segTables.join('')}</tr></tbody></table>`;
   }
   let body='';
   if(order==='shelf'){body=buildTable(rows,true);}
@@ -363,8 +379,8 @@ function doPrint(rows,order){
 .dt thead th:last-child{text-align:center;}
 .dt tbody td{padding:${nc>=3?'3px 6px':'4px 7px'};border-bottom:.5px solid #ebebeb;vertical-align:middle;line-height:1.35;}
 .dt tbody .ev td{background:${aLight};}
-.cs{font-weight:500;color:${acc};white-space:nowrap;font-size:.9em;width:14%;}
-.cn{width:auto;}.cp{white-space:nowrap;color:#666;font-size:.85em;text-align:center;width:11%;}
+.cs{font-weight:500;color:${acc};white-space:nowrap;font-size:.9em;width:1%;}
+.cn{width:auto;min-width:0;word-break:break-all;}.cp{white-space:nowrap;color:#666;font-size:.85em;text-align:center;width:1%;}
 .dv{width:5px;background:#f2f2f2;border:none!important;}.multi td{font-size:${nc>=3?'7pt':'8pt'};}
 .pb{page-break-before:always;padding-top:${isLand?'10mm':'12mm'};}
 @media print{@page{size:${isLand?'A4 landscape':'A4 portrait'};margin:0;}body{margin:0;}.pb{page-break-before:always;}.dt tbody tr{page-break-inside:avoid;}}
