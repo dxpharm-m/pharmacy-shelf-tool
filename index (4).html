@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>薬局棚表自動生成ツール</title>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.44.0/tabler-icons.min.css">
+<style>
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','Noto Sans JP',sans-serif;background:#f7f7f5;color:#1a1a1a;min-height:100vh;padding:2rem 1rem;}
+.wrap{max-width:720px;margin:0 auto;}
+.hd{margin-bottom:2rem;}
+.hd h1{font-size:22px;font-weight:600;color:#1a1a1a;margin-bottom:4px;}
+.hd p{font-size:13px;color:#666;}
+.step{margin-bottom:1.25rem;}
+.sl{font-size:11px;font-weight:600;color:#999;letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
+.card{background:#fff;border:1px solid #e8e8e6;border-radius:12px;padding:1rem 1.25rem;}
+.uz{border:1.5px dashed #ccc;border-radius:10px;padding:2rem;text-align:center;cursor:pointer;transition:background .15s;}
+.uz:hover{background:#f9f9f7;}
+.uz i{font-size:28px;color:#aaa;display:block;margin-bottom:8px;}
+.uz p{font-size:14px;color:#666;}
+.uz span{font-size:12px;color:#aaa;}
+#fi{display:none;}
+.fl{display:flex;align-items:center;gap:10px;background:#f7f7f5;border-radius:8px;padding:10px 14px;}
+.fl i{font-size:18px;color:#888;}
+.fl .fn{font-size:14px;font-weight:500;flex:1;}
+.fl button{font-size:12px;color:#888;background:none;border:none;cursor:pointer;padding:0;}
+.pw{overflow-x:auto;margin-top:10px;border-radius:8px;border:1px solid #e8e8e6;}
+.pt{width:100%;border-collapse:collapse;font-size:12px;}
+.pt th{background:#f7f7f5;color:#888;font-weight:500;padding:5px 8px;text-align:left;border-bottom:1px solid #e8e8e6;white-space:nowrap;}
+.pt td{padding:4px 8px;border-bottom:1px solid #f0f0ee;color:#1a1a1a;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis;}
+.pt tr:last-child td{border-bottom:none;}
+.mg{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.mi label{font-size:12px;color:#666;display:block;margin-bottom:3px;}
+.mi select{width:100%;font-size:12px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;background:#fff;}
+.req{color:#e53e3e;margin-left:2px;}
+.s3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;}
+.s3 label{font-size:11px;color:#aaa;display:block;margin-bottom:3px;}
+.s3 select{width:100%;font-size:12px;padding:6px 8px;border:1px solid #ddd;border-radius:6px;background:#fff;}
+.note{font-size:11px;color:#aaa;margin-top:8px;padding:6px 10px;background:#f7f7f5;border-radius:6px;line-height:1.6;}
+.note b{font-weight:500;color:#888;}
+.sr{display:flex;gap:10px;flex-wrap:wrap;}
+.si{flex:1;min-width:110px;}
+.si label{font-size:12px;color:#666;display:block;margin-bottom:3px;}
+.si select,.si input[type=text]{width:100%;font-size:12px;padding:7px 10px;border:1px solid #ddd;border-radius:6px;background:#fff;}
+.pi{display:flex;flex-direction:column;gap:5px;}
+.pi label{font-size:12px;color:#666;}
+.pi input{font-size:14px;padding:8px 12px;border:1px solid #ddd;border-radius:6px;width:100%;}
+.ar{display:flex;gap:8px;flex-wrap:wrap;margin-top:1.5rem;}
+.bp{background:#1a1a1a;color:#fff;border:none;border-radius:8px;padding:11px 20px;font-size:14px;font-weight:500;cursor:pointer;display:flex;align-items:center;gap:6px;}
+.bp:hover{background:#333;}
+.bp:disabled{opacity:.4;cursor:not-allowed;}
+.bs{background:#fff;border:1px solid #ddd;border-radius:8px;padding:11px 20px;font-size:14px;cursor:pointer;display:flex;align-items:center;gap:6px;color:#1a1a1a;}
+.bs:hover{background:#f7f7f5;}
+.st{font-size:13px;margin-top:8px;display:none;padding:8px 12px;border-radius:6px;}
+.st.show{display:block;}
+.st.ok{color:#276749;background:#f0fff4;border:1px solid #c6f6d5;}
+.st.err{color:#9b2c2c;background:#fff5f5;border:1px solid #fed7d7;}
+.hidden{display:none!important;}
+.cc{display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;}
+.chip{width:28px;height:28px;border-radius:6px;cursor:pointer;border:3px solid transparent;transition:border-color .15s;}
+.chip.on{border-color:#1a1a1a;}
+.clabel{font-size:12px;color:#666;margin-bottom:4px;}
+.orient-row{display:flex;gap:8px;margin-top:4px;}
+.ob{flex:1;padding:8px;font-size:12px;border:1px solid #ddd;border-radius:6px;cursor:pointer;background:#fff;color:#1a1a1a;display:flex;align-items:center;justify-content:center;gap:5px;}
+.ob.on{background:#f0f4ff;border-color:#4a90d9;font-weight:500;color:#1a56a8;}
+.divider{border:none;border-top:1px solid #e8e8e6;margin:10px 0;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hd">
+    <h1>薬局棚表自動生成ツール</h1>
+    <p>CSV・Excelをアップロードして、印刷用の棚表（Excel / Word / ブラウザ印刷）を自動作成します。</p>
+  </div>
+
+  <div class="step">
+    <div class="sl">① ファイルアップロード</div>
+    <div class="card">
+      <div class="uz" id="uz">
+        <i class="ti ti-upload"></i>
+        <p>クリックまたはドロップ</p>
+        <span>CSV / Excel (.csv .xlsx .xls) 対応</span>
+      </div>
+      <div id="fl" class="hidden" style="margin-top:8px;"></div>
+      <input type="file" id="fi" accept=".csv,.xlsx,.xls">
+    </div>
+  </div>
+
+  <div class="step hidden" id="sP">
+    <div class="sl">② プレビュー（先頭8行）</div>
+    <div class="card"><div class="pw"><table class="pt" id="pt"></table></div></div>
+  </div>
+
+  <div class="step hidden" id="sM">
+    <div class="sl">③ 列マッピング</div>
+    <div class="card">
+      <div class="mg">
+        <div class="mi"><label>JANコード列<span class="req">*</span></label><select id="mJ"></select></div>
+        <div class="mi"><label>医薬品名列<span class="req">*</span></label><select id="mN"></select></div>
+        <div class="mi"><label>包装単位列（任意）</label><select id="mP"></select></div>
+        <div class="mi" style="visibility:hidden;"></div>
+        <div class="mi" style="grid-column:1/-1;">
+          <hr class="divider">
+          <div style="font-size:12px;color:#666;margin-bottom:6px;">棚番号列<span class="req">*</span>　最大3か所まで設定できます</div>
+          <div class="s3">
+            <div><label>棚番号①（必須）</label><select id="mS1"></select></div>
+            <div><label>棚番号②（任意）</label><select id="mS2"></select></div>
+            <div><label>棚番号③（任意）</label><select id="mS3"></select></div>
+          </div>
+          <div class="note">
+            <b>棚番号順：</b>棚番号ごとに別行展開（A-01行・B-03行）　
+            <b>五十音順：</b>同一薬品をまとめて表示（A-01 / B-03）
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="step hidden" id="sS">
+    <div class="sl">④ 出力設定</div>
+    <div class="card" style="display:flex;flex-direction:column;gap:14px;">
+      <div class="pi"><label>薬局名（表紙に記載）</label><input type="text" id="ph" placeholder="例：○○薬局"></div>
+      <div class="sr">
+        <div class="si"><label>ソート順</label>
+          <select id="so"><option value="shelf">棚番号順</option><option value="kana">五十音順</option></select>
+        </div>
+        <div class="si"><label>段組み</label>
+          <select id="nc"><option value="1">1段</option><option value="2" selected>2段</option><option value="3">3段</option><option value="4">4段</option></select>
+        </div>
+        <div class="si"><label>出力形式</label>
+          <select id="of"><option value="print">ブラウザ印刷（推奨）</option><option value="xlsx">Excel (.xlsx)</option><option value="docx">Word (.docx)</option></select>
+        </div>
+      </div>
+      <div>
+        <label style="font-size:12px;color:#666;display:block;margin-bottom:4px;">A4向き</label>
+        <div class="orient-row">
+          <button class="ob on" id="obP" onclick="setOrient('portrait')"><i class="ti ti-rectangle-vertical"></i>縦（ポートレート）</button>
+          <button class="ob" id="obL" onclick="setOrient('landscape')"><i class="ti ti-rectangle"></i>横（ランドスケープ）</button>
+        </div>
+      </div>
+      <div>
+        <div class="clabel">アクセントカラー</div>
+        <div class="cc" id="cc">
+          <div class="chip on" data-c="#2B6CB0" style="background:#2B6CB0;" title="ブルー"></div>
+          <div class="chip" data-c="#276749" style="background:#276749;" title="グリーン"></div>
+          <div class="chip" data-c="#744210" style="background:#744210;" title="ブラウン"></div>
+          <div class="chip" data-c="#553C9A" style="background:#553C9A;" title="パープル"></div>
+          <div class="chip" data-c="#9B2C2C" style="background:#9B2C2C;" title="レッド"></div>
+          <div class="chip" data-c="#2C5F6F" style="background:#2C5F6F;" title="ティール"></div>
+          <div class="chip" data-c="#1A6B5A" style="background:#1A6B5A;" title="エメラルド"></div>
+          <div class="chip" data-c="#5C4033" style="background:#5C4033;" title="モカ"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ar">
+    <button class="bp" id="gb" disabled><i class="ti ti-download"></i>棚表を生成</button>
+    <button class="bs" id="rb"><i class="ti ti-refresh"></i>リセット</button>
+  </div>
+  <div class="st" id="st"></div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/docx/7.8.2/docx.umd.min.js"></script>
+<script>
+let data=[],hdrs=[],acc='#2B6CB0',orient='portrait';
+
+document.getElementById('cc').addEventListener('click',e=>{
+  const c=e.target.closest('.chip');if(!c)return;
+  document.querySelectorAll('.chip').forEach(x=>x.classList.remove('on'));
+  c.classList.add('on');acc=c.dataset.c;
+});
+function setOrient(v){
+  orient=v;
+  document.getElementById('obP').classList.toggle('on',v==='portrait');
+  document.getElementById('obL').classList.toggle('on',v==='landscape');
+}
+
+const uz=document.getElementById('uz'),fi=document.getElementById('fi'),gb=document.getElementById('gb'),stEl=document.getElementById('st');
+uz.addEventListener('click',()=>fi.click());
+uz.addEventListener('dragover',e=>{e.preventDefault();uz.style.background='#f9f9f7';});
+uz.addEventListener('dragleave',()=>uz.style.background='');
+uz.addEventListener('drop',e=>{e.preventDefault();uz.style.background='';if(e.dataTransfer.files[0])load(e.dataTransfer.files[0]);});
+fi.addEventListener('change',e=>{if(e.target.files[0])load(e.target.files[0]);});
+
+function load(f){
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const wb=XLSX.read(e.target.result,{type:'array'});
+      const ws=wb.Sheets[wb.SheetNames[0]];
+      const j=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+      if(j.length<2){msg('データが少なすぎます','err');return;}
+      hdrs=j[0].map((h,i)=>h?String(h):cl(i));
+      data=j.slice(1).filter(r=>r.some(c=>c!==''));
+      document.getElementById('uz').classList.add('hidden');
+      const flEl=document.getElementById('fl');
+      flEl.classList.remove('hidden');
+      flEl.innerHTML=`<i class="ti ti-file-spreadsheet"></i><span class="fn">${f.name}</span><button onclick="resetApp()">変更</button>`;
+      prev(j);popMap();
+      ['sP','sM','sS'].forEach(id=>document.getElementById(id).classList.remove('hidden'));
+      gb.disabled=false;
+    }catch(e){msg('エラー: '+e.message,'err');}
+  };r.readAsArrayBuffer(f);
+}
+
+function cl(i){let s='';i++;while(i>0){s=String.fromCharCode(64+(i%26||26))+s;i=Math.floor((i-1)/26);}return s;}
+
+function prev(j){
+  const t=document.getElementById('pt');
+  t.innerHTML='<thead><tr>'+hdrs.map(h=>`<th>${h}</th>`).join('')+'</tr></thead><tbody>'+
+    j.slice(1,9).map(r=>'<tr>'+hdrs.map((_,i)=>`<td>${String(r[i]||'').substring(0,15)}</td>`).join('')+'</tr>').join('')+'</tbody>';
+}
+
+function popMap(){
+  const opt=(ex='')=>ex+hdrs.map((h,i)=>`<option value="${i}">${cl(i)}: ${h}</option>`).join('');
+  ['mJ','mN'].forEach(id=>document.getElementById(id).innerHTML='<option value="">選択してください</option>'+opt());
+  ['mP','mS2','mS3'].forEach(id=>document.getElementById(id).innerHTML='<option value="">なし</option>'+opt());
+  document.getElementById('mS1').innerHTML='<option value="">選択してください</option>'+opt();
+  const ps={mJ:/jan|jas|gtin|gs1|バーコード/i,mN:/品名|薬品名|医薬品名|商品名|製品名/i,mP:/包装|規格|単位/i,mS1:/棚.?1|棚番号.?1|ロケ.?1/i,mS2:/棚.?2|棚番号.?2|ロケ.?2/i,mS3:/棚.?3|棚番号.?3|ロケ.?3/i};
+  Object.entries(ps).forEach(([id,p])=>{const i=hdrs.findIndex(h=>p.test(h));if(i>=0)document.getElementById(id).value=i;});
+  if(!document.getElementById('mS1').value){const i=hdrs.findIndex(h=>/棚|ロケ|場所/i.test(h));if(i>=0)document.getElementById('mS1').value=i;}
+}
+
+function msg(t,tp){stEl.textContent=t;stEl.className='st show'+(tp?' '+tp:'');setTimeout(()=>stEl.classList.remove('show'),5000);}
+
+function baseRows(){
+  const ji=parseInt(document.getElementById('mJ').value),ni=parseInt(document.getElementById('mN').value);
+  const pv=document.getElementById('mP').value,s1v=document.getElementById('mS1').value;
+  const s2v=document.getElementById('mS2').value,s3v=document.getElementById('mS3').value;
+  if(isNaN(ji)||isNaN(ni)||!s1v){msg('必須列をすべて選択してください','err');return null;}
+  const s1=parseInt(s1v),s2=s2v?parseInt(s2v):null,s3=s3v?parseInt(s3v):null;
+  return data.filter(r=>r[ni]&&r[s1]).map(r=>{
+    const sh=[String(r[s1]||'').trim()];
+    if(s2!==null&&String(r[s2]||'').trim())sh.push(String(r[s2]).trim());
+    if(s3!==null&&String(r[s3]||'').trim())sh.push(String(r[s3]).trim());
+    return{name:String(r[ni]||''),shelves:sh,joined:sh.join(' / '),pkg:pv?String(r[parseInt(pv)]||''):''};
+  });
+}
+
+function shelfRows(b){const e=[];b.forEach(r=>r.shelves.forEach(s=>{if(s)e.push({name:r.name,pkg:r.pkg,sd:s});}));return e.sort((a,b)=>a.sd.localeCompare(b.sd,'ja'));}
+function kanaRows(b){return[...b].sort((a,c)=>a.name.localeCompare(c.name,'ja')).map(r=>({name:r.name,pkg:r.pkg,sd:r.joined}));}
+
+function kg(n){
+  const g=[['ア行',/^[アイウエオぁぃぅぇぉァィゥェォあいうえお]/],['カ行',/^[カキクケコかきくけこガギグゲゴがぎぐげご]/],['サ行',/^[サシスセソさしすせそザジズゼゾざじずぜぞ]/],['タ行',/^[タチツテトたちつてとダヂヅデドだぢづでど]/],['ナ行',/^[ナニヌネノなにぬねの]/],['ハ行',/^[ハヒフヘホはひふへほバビブベボばびぶべぼパピプペポぱぴぷぺぽ]/],['マ行',/^[マミムメモまみむめも]/],['ヤ行',/^[ヤユヨやゆよ]/],['ラ行',/^[ラリルレロらりるれろ]/],['ワ行',/^[ワヲンわをん]/]];
+  for(const[l,p]of g)if(p.test(n.charAt(0)))return l;return'その他';
+}
+const GO=['ア行','カ行','サ行','タ行','ナ行','ハ行','マ行','ヤ行','ラ行','ワ行','その他'];
+
+gb.addEventListener('click',()=>{
+  const b=baseRows();if(!b)return;
+  const order=document.getElementById('so').value;
+  const rows=order==='shelf'?shelfRows(b):kanaRows(b);
+  const fmt=document.getElementById('of').value;
+  if(fmt==='print')doPrint(rows,order);
+  else if(fmt==='xlsx')doXlsx(rows,order);
+  else doDocx(rows,order);
+});
+
+function doPrint(rows,order){
+  const ph=document.getElementById('ph').value||'',today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
+  const nc=parseInt(document.getElementById('nc').value),isLand=orient==='landscape';
+  const W=isLand?'297mm':'210mm',H=isLand?'210mm':'297mm',aLight=acc+'1A';
+  function buildTable(rowArr,isShelf){
+    const half=Math.ceil(rowArr.length/nc);
+    if(nc===1){
+      const hs=isShelf?['棚番号','医薬品名','包装単位']:['医薬品名','包装単位','棚番号'];
+      return`<table class="dt"><thead><tr>${hs.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rowArr.map((r,i)=>{const[c1,c2,c3]=isShelf?[r.sd,r.name,r.pkg]:[r.name,r.pkg,r.sd];return`<tr class="${i%2?'ev':''}"><td class="cs">${c1}</td><td class="cn">${c2}</td><td class="cp">${c3}</td></tr>`;}).join('')}</tbody></table>`;
+    }
+    let trs='';
+    for(let i=0;i<half;i++){let cells='';for(let c=0;c<nc;c++){const r=rowArr[i+c*half];if(r){const[c1,c2,c3]=isShelf?[r.sd,r.name,r.pkg]:[r.name,r.pkg,r.sd];cells+=`<td class="cs">${c1}</td><td class="cn">${c2}</td><td class="cp">${c3}</td>`;}else{cells+=`<td colspan="3"></td>`;}if(c<nc-1)cells+=`<td class="dv"></td>`;}trs+=`<tr class="${i%2?'ev':''}">${cells}</tr>`;}
+    return`<table class="dt multi"><tbody>${trs}</tbody></table>`;
+  }
+  let body='';
+  if(order==='shelf'){body=buildTable(rows,true);}
+  else{const g={};rows.forEach(r=>{const gg=kg(r.name);if(!g[gg])g[gg]=[];g[gg].push(r);});GO.filter(x=>g[x]).forEach((x,i)=>{body+=`<div class="${i>0?'pb':''}"><div class="kh">${x}</div>${buildTable(g[x],false)}</div>`;});}
+  const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>棚表</title>
+<style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Noto Sans JP',sans-serif;background:#fff;color:#1a1a1a;}
+.cover{width:${W};min-height:${H};display:flex;flex-direction:column;align-items:center;justify-content:center;page-break-after:always;position:relative;overflow:hidden;}
+.ct{position:absolute;top:0;left:0;right:0;height:6px;background:${acc};}
+.cb{position:absolute;bottom:0;left:0;right:0;height:6px;background:${acc};}
+.cs2{position:absolute;top:0;bottom:0;right:0;width:48px;background:${aLight};}
+.cen{text-align:center;}.csub{font-size:10pt;font-weight:500;color:${acc};letter-spacing:.15em;margin-bottom:22mm;}
+.ctitle{font-size:38pt;font-weight:700;letter-spacing:.08em;margin-bottom:6mm;}
+.cbar{width:36mm;height:2.5px;background:${acc};margin:0 auto 8mm;}.cph{font-size:17pt;font-weight:500;color:#222;margin-bottom:4mm;}.cdate{font-size:10pt;color:#888;}
+.bp2{width:${W};padding:${isLand?'10mm 14mm':'12mm 14mm'};padding-bottom:10mm;}
+.ph2{display:flex;align-items:center;justify-content:space-between;border-bottom:2.5px solid ${acc};padding-bottom:5px;margin-bottom:10px;}
+.ph2t{font-size:13pt;font-weight:700;color:${acc};}.ph2s{font-size:9pt;color:#999;}
+.kh{font-size:11pt;font-weight:700;color:#fff;background:${acc};padding:3px 12px;border-radius:3px;display:inline-block;margin:10px 0 5px;}
+.dt{width:100%;border-collapse:collapse;font-size:${isLand?(nc>=3?'7.5pt':'8.5pt'):(nc>=3?'7.5pt':'9pt')};}
+.dt thead th{background:${acc};color:#fff;font-weight:500;padding:5px 7px;text-align:left;}
+.dt thead th:last-child{text-align:center;}
+.dt tbody td{padding:${nc>=3?'3px 6px':'4px 7px'};border-bottom:.5px solid #ebebeb;vertical-align:middle;line-height:1.35;}
+.dt tbody .ev td{background:${aLight};}
+.cs{font-weight:500;color:${acc};white-space:nowrap;font-size:.9em;width:14%;}
+.cn{width:auto;}.cp{white-space:nowrap;color:#666;font-size:.85em;text-align:center;width:11%;}
+.dv{width:5px;background:#f2f2f2;border:none!important;}.multi td{font-size:${nc>=3?'7pt':'8pt'};}
+.pb{page-break-before:always;padding-top:${isLand?'10mm':'12mm'};}
+@media print{@page{size:${isLand?'A4 landscape':'A4 portrait'};margin:0;}body{margin:0;}.pb{page-break-before:always;}.dt tbody tr{page-break-inside:avoid;}}
+</style></head><body>
+<div class="cover"><div class="ct"></div><div class="cb"></div><div class="cs2"></div>
+<div class="cen"><div class="csub">PHARMACY SHELF LIST</div><div class="ctitle">棚　表</div><div class="cbar"></div><div class="cph">${ph||'&nbsp;'}</div><div class="cdate">作成日：${today}</div></div></div>
+<div class="bp2"><div class="ph2"><div class="ph2t">${order==='shelf'?'棚番号順':'五十音順'}</div><div class="ph2s">${ph}</div></div>${body}</div>
+<script>window.onload=()=>window.print();<\/script></body></html>`;
+  const w=window.open('','_blank');w.document.write(html);w.document.close();
+  msg('印刷プレビューを開きました','ok');
+}
+
+function doXlsx(rows,order){
+  const ph=document.getElementById('ph').value||'　',today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}),isLand=orient==='landscape';
+  const wb=XLSX.utils.book_new();
+  const cws=XLSX.utils.aoa_to_sheet([[''],[''],['薬局棚表'],[''],[ ph],['作成日：'+today]]);
+  cws['!cols']=[{wch:40}];XLSX.utils.book_append_sheet(wb,cws,'表紙');
+  let aoa,ws;
+  if(order==='shelf'){
+    aoa=[['棚番号','医薬品名','包装単位']];rows.forEach(r=>aoa.push([r.sd,r.name,r.pkg]));
+    ws=XLSX.utils.aoa_to_sheet(aoa);ws['!cols']=isLand?[{wch:18},{wch:52},{wch:14}]:[{wch:16},{wch:44},{wch:12}];
+    XLSX.utils.book_append_sheet(wb,ws,'棚番号順');
+  }else{
+    const g={};rows.forEach(r=>{const gg=kg(r.name);if(!g[gg])g[gg]=[];g[gg].push(r);});
+    aoa=[['医薬品名','包装単位','棚番号']];const merges=[];let ri=1;
+    GO.filter(x=>g[x]).forEach(x=>{aoa.push([`── ${x} ──`,'','']);merges.push({s:{r:ri,c:0},e:{r:ri,c:2}});ri++;g[x].forEach(r=>{aoa.push([r.name,r.pkg,r.sd]);ri++;});});
+    ws=XLSX.utils.aoa_to_sheet(aoa);ws['!merges']=merges;ws['!cols']=isLand?[{wch:52},{wch:14},{wch:20}]:[{wch:44},{wch:12},{wch:18}];
+    XLSX.utils.book_append_sheet(wb,ws,'五十音順');
+  }
+  ws['!pageSetup']={paperSize:9,orientation:isLand?'landscape':'portrait',fitToPage:true,fitToWidth:1,fitToHeight:0};
+  ws['!margins']={top:.75,bottom:.75,left:.7,right:.7,header:.3,footer:.3};
+  const blob=new Blob([XLSX.write(wb,{bookType:'xlsx',type:'array'})],{type:'application/octet-stream'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='棚表.xlsx';a.click();
+  msg('Excelを生成しました！','ok');
+}
+
+function doDocx(rows,order){
+  try{
+    const{Document,Packer,Paragraph,Table,TableRow,TableCell,TextRun,WidthType,PageBreak,AlignmentType,BorderStyle,ShadingType,PageOrientation}=docx;
+    const ph=document.getElementById('ph').value||'　',today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'}),isLand=orient==='landscape';
+    const hx=acc.replace('#','');
+    const nb={top:{style:BorderStyle.NONE,size:0},bottom:{style:BorderStyle.NONE,size:0},left:{style:BorderStyle.NONE,size:0},right:{style:BorderStyle.NONE,size:0}};
+    const rb={top:{style:BorderStyle.SINGLE,size:1,color:'E8E8E8'},bottom:{style:BorderStyle.SINGLE,size:1,color:'E8E8E8'},left:{style:BorderStyle.NONE,size:0},right:{style:BorderStyle.NONE,size:0}};
+    const ps={size:{width:isLand?16838:11906,height:isLand?11906:16838},orientation:isLand?PageOrientation.LANDSCAPE:PageOrientation.PORTRAIT,margins:{top:720,bottom:720,left:800,right:800}};
+    function mkH(ls){return new TableRow({children:ls.map(l=>new TableCell({children:[new Paragraph({children:[new TextRun({text:l,bold:true,size:17,color:'FFFFFF'})],alignment:AlignmentType.CENTER})],borders:nb,shading:{type:ShadingType.SOLID,fill:hx}}))});}
+    function mkR(cells,isEven,sf){return new TableRow({children:cells.map((c,i)=>new TableCell({children:[new Paragraph({children:[new TextRun({text:String(c||''),size:16,color:sf&&i===0?hx:!sf&&i===2?hx:'1A1A1A',bold:sf&&i===0||(!sf&&i===2)})],alignment:i===1?AlignmentType.CENTER:AlignmentType.LEFT})],borders:rb,shading:isEven?{type:ShadingType.SOLID,fill:hx+'18'}:{}}))});}
+    function bldTbl(ra,sf){const hs=sf?['棚番号','医薬品名','包装単位']:['医薬品名','包装単位','棚番号'];const tr=[mkH(hs)];ra.forEach((r,i)=>{const cs=sf?[r.sd,r.name,r.pkg]:[r.name,r.pkg,r.sd];tr.push(mkR(cs,i%2===1,sf));});return new Table({rows:tr,width:{size:100,type:WidthType.PERCENTAGE}});}
+    const children=[
+      new Paragraph({children:[new TextRun({text:'',break:6})],alignment:AlignmentType.CENTER}),
+      new Paragraph({children:[new TextRun({text:'薬　局　棚　表',size:54,bold:true})],alignment:AlignmentType.CENTER}),
+      new Paragraph({children:[new TextRun({text:'',break:2})],alignment:AlignmentType.CENTER}),
+      new Paragraph({children:[new TextRun({text:ph,size:34,bold:true,color:hx})],alignment:AlignmentType.CENTER}),
+      new Paragraph({children:[new TextRun({text:'',break:1})],alignment:AlignmentType.CENTER}),
+      new Paragraph({children:[new TextRun({text:'作成日：'+today,size:20,color:'888888'})],alignment:AlignmentType.CENTER}),
+      new Paragraph({children:[new PageBreak()]}),
+    ];
+    if(order==='shelf'){children.push(bldTbl(rows,true));}
+    else{
+      const g={};rows.forEach(r=>{const gg=kg(r.name);if(!g[gg])g[gg]=[];g[gg].push(r);});
+      let first=true;
+      GO.filter(x=>g[x]).forEach(x=>{
+        if(!first)children.push(new Paragraph({children:[new PageBreak()]}));first=false;
+        children.push(new Paragraph({children:[new TextRun({text:x,bold:true,size:24,color:'FFFFFF'})],shading:{type:ShadingType.SOLID,fill:hx},spacing:{after:80}}));
+        children.push(bldTbl(g[x],false));
+      });
+    }
+    const doc=new Document({sections:[{...ps,children}]});
+    Packer.toBlob(doc).then(blob=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='棚表.docx';a.click();msg('Wordを生成しました！','ok');});
+  }catch(e){msg('Wordエラー: '+e.message,'err');}
+}
+
+function resetApp(){
+  data=[];hdrs=[];fi.value='';
+  document.getElementById('uz').classList.remove('hidden');
+  document.getElementById('fl').classList.add('hidden');
+  ['sP','sM','sS'].forEach(id=>document.getElementById(id).classList.add('hidden'));
+  gb.disabled=true;document.getElementById('pt').innerHTML='';
+}
+document.getElementById('rb').addEventListener('click',resetApp);
+</script>
+</body>
+</html>
