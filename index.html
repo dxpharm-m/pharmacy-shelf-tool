@@ -185,25 +185,52 @@ uz.addEventListener('dragleave',()=>uz.style.background='');
 uz.addEventListener('drop',e=>{e.preventDefault();uz.style.background='';if(e.dataTransfer.files[0])load(e.dataTransfer.files[0]);});
 fi.addEventListener('change',e=>{if(e.target.files[0])load(e.target.files[0]);});
 
+function parseAndRender(arrayBuf){
+  // ShiftJIS検出：CSVのとき文字化けしていないかチェックしてリトライ
+  const isCsv = currentFile && currentFile.name.toLowerCase().endsWith('.csv');
+  let wb;
+  if(isCsv){
+    // まずUTF-8で試みる（BOM付きUTF-8含む）
+    try{
+      wb = XLSX.read(arrayBuf, {type:'array', codepage:65001});
+      // 先頭セルに日本語が含まれるか簡易チェック
+      const ws0 = wb.Sheets[wb.SheetNames[0]];
+      const j0 = XLSX.utils.sheet_to_json(ws0,{header:1,defval:''});
+      const sample = JSON.stringify(j0.slice(0,3));
+      // 文字化け兆候（置換文字や意味不明なラテン文字の連続）があればShift-JISで再読込
+      if(/\uFFFD/.test(sample) || /[âãäåæ]/.test(sample)){
+        wb = XLSX.read(arrayBuf, {type:'array', codepage:932});
+      }
+    }catch(_){
+      wb = XLSX.read(arrayBuf, {type:'array', codepage:932});
+    }
+  } else {
+    wb = XLSX.read(arrayBuf, {type:'array'});
+  }
+  const ws=wb.Sheets[wb.SheetNames[0]];
+  const j=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
+  if(j.length<2){msg('データが少なすぎます','err');return;}
+  hdrs=j[0].map((h,i)=>h?String(h):cl(i));
+  data=j.slice(1).filter(r=>r.some(c=>c!==''));
+  document.getElementById('uz').classList.add('hidden');
+  const flEl=document.getElementById('fl');
+  flEl.classList.remove('hidden');
+  flEl.innerHTML=`<i class="ti ti-file-spreadsheet"></i><span class="fn">${currentFile.name}</span><button onclick="resetApp()">変更</button>`;
+  prev(j);popMap();
+  ['sP','sM','sS'].forEach(id=>document.getElementById(id).classList.remove('hidden'));
+  gb.disabled=false;
+}
+
+let currentFile=null;
 function load(f){
+  currentFile=f;
   const r=new FileReader();
   r.onload=e=>{
     try{
-      const wb=XLSX.read(e.target.result,{type:'array'});
-      const ws=wb.Sheets[wb.SheetNames[0]];
-      const j=XLSX.utils.sheet_to_json(ws,{header:1,defval:''});
-      if(j.length<2){msg('データが少なすぎます','err');return;}
-      hdrs=j[0].map((h,i)=>h?String(h):cl(i));
-      data=j.slice(1).filter(r=>r.some(c=>c!==''));
-      document.getElementById('uz').classList.add('hidden');
-      const flEl=document.getElementById('fl');
-      flEl.classList.remove('hidden');
-      flEl.innerHTML=`<i class="ti ti-file-spreadsheet"></i><span class="fn">${f.name}</span><button onclick="resetApp()">変更</button>`;
-      prev(j);popMap();
-      ['sP','sM','sS'].forEach(id=>document.getElementById(id).classList.remove('hidden'));
-      gb.disabled=false;
+      parseAndRender(e.target.result);
     }catch(e){msg('エラー: '+e.message,'err');}
-  };r.readAsArrayBuffer(f);
+  };
+  r.readAsArrayBuffer(f);
 }
 
 function cl(i){let s='';i++;while(i>0){s=String.fromCharCode(64+(i%26||26))+s;i=Math.floor((i-1)/26);}return s;}
