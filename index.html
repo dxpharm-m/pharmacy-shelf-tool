@@ -428,7 +428,7 @@ function doPrint(rows,order){
 .dt tbody .ev td{background:${aLight};}
 .cs{font-weight:500;color:${acc};white-space:nowrap;font-size:.9em;width:1%;}
 .cn{width:auto;min-width:0;word-break:break-all;}
-.cp{white-space:nowrap;color:#666;font-size:.85em;text-align:center;width:1%;}
+.cp{white-space:normal;color:#666;font-size:.72em;text-align:center;width:1%;min-width:28pt;max-width:44pt;word-break:break-all;line-height:1.2;}
 .dv{width:5px;background:#f2f2f2;border:none!important;}
 .pb{page-break-before:always;padding-top:${isLand?'10mm':'12mm'};}
 @media print{@page{size:${W} ${H};margin:0;}body{margin:0;}.pb{page-break-before:always;}.dt tbody tr{page-break-inside:avoid;}}
