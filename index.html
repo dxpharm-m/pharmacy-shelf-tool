@@ -342,47 +342,76 @@ function doPrint(rows,order){
   const ph=document.getElementById('ph').value||'',today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const nc=parseInt(document.getElementById('nc').value),isLand=orient==='landscape';
 
-  // 用紙サイズ
+  // 用紙サイズ(mm)
   const paperSize=document.getElementById('paperSize').value;
   const paperDims={a4:[210,297],b5:[182,257],a3:[297,420],a5:[148,210]};
   const [pw,ph2]=paperDims[paperSize]||[210,297];
   const W=(isLand?ph2:pw)+'mm', H=(isLand?pw:ph2)+'mm';
   const aLight=acc+'1A';
 
-  // 行高さ固定（px）
-  // 96dpi基準: 1mm≒3.78px。段数が多いほど文字小さく行も詰める
-  const ROW_H = nc>=3 ? 16 : nc>=2 ? 18 : 20;   // 1行の高さ(px)
-  const HEADER_H = 24;                             // theadの高さ(px)
-  // 本文エリア高さ(mm→px変換)から1ページあたり行数を計算
-  const bodyH_mm = (isLand ? pw : ph2) - 24;      // 上下余白を除いた高さ(mm)
-  const bodyH_px = bodyH_mm * 3.7795;             // mm→px
-  const rowsPerPage = Math.max(5, Math.floor(bodyH_px / ROW_H));
-
-  // ユニーク医薬品数（棚番号展開前：nameで重複除去）
+  // ユニーク医薬品数
   const drugCount=new Set(rows.map(r=>r.name)).size;
 
-  function buildTable(rowArr,isShelf){
-    const fixedCss='white-space:nowrap;width:1%;';
-    const nameCss='width:auto;word-break:break-all;';
-    const colsShelf=`<colgroup><col style="${fixedCss}"><col style="${nameCss}"><col style="${fixedCss}"></colgroup>`;
-    const colsKana=`<colgroup><col style="${nameCss}"><col style="${fixedCss}"><col style="${fixedCss}"></colgroup>`;
-    const cg=isShelf?colsShelf:colsKana;
-    const hs=isShelf?['棚番号','医薬品名','包装単位']:['医薬品名','包装単位','棚番号'];
-    const headHtml=`<thead><tr>${hs.map(h=>`<th>${h}</th>`).join('')}</tr></thead>`;
+  // ===== 行高さ固定の核心 =====
+  // Chromeの印刷は 96px = 1インチ = 25.4mm
+  // 1px = 25.4/96 mm = 0.2646mm
+  // 1mm = 96/25.4 px = 3.7795px
+  const MM2PX = 3.7795;
 
-    // 行高さ固定（ROW_H px = 印刷時の1行の高さ）
-    // overflow:hiddenで折り返しも切り、必ず1行=ROW_H px に収める
+  // 本文エリアの高さ(mm)：表紙ヘッダー(15mm) + 上下余白(22mm) を除く
+  const pageW_mm = isLand ? ph2 : pw;
+  const pageH_mm = isLand ? pw : ph2;
+  const bodyH_mm = pageH_mm - 38; // 上余白12+ページヘッダー15+下余白11
+
+  // 1行の高さ(mm)：段数に関わらず固定。包装単位が改行しても収まる高さ
+  const ROW_MM = nc >= 3 ? 5.5 : nc >= 2 ? 6.0 : 7.0;
+  const ROW_PX = Math.round(ROW_MM * MM2PX); // px換算
+
+  // theadの高さ(mm)
+  const HEAD_MM = 7;
+  const HEAD_PX = Math.round(HEAD_MM * MM2PX);
+
+  // 1ページあたりの行数
+  const rowsPerPage = Math.max(5, Math.floor((bodyH_mm - HEAD_MM) / ROW_MM));
+
+  // 棚番号・包装単位の最低幅(mm)
+  const shelfW_mm = nc >= 3 ? 14 : nc >= 2 ? 16 : 20;
+  const pkgW_mm   = nc >= 3 ? 12 : nc >= 2 ? 14 : 18;
+  const shelfW = shelfW_mm + 'mm';
+  const pkgW   = pkgW_mm   + 'mm';
+
+  // フォントサイズ(pt)
+  const fontSize = nc >= 3 ? '6.5pt' : nc >= 2 ? '7.5pt' : '9pt';
+  const headSize = nc >= 3 ? '6pt'   : nc >= 2 ? '7pt'   : '8.5pt';
+
+  function buildTable(rowArr,isShelf){
+    const hs=isShelf?['棚番号','医薬品名','包装単位']:['医薬品名','包装単位','棚番号'];
+
+    // colgroup で列幅を厳密に指定
+    let cg;
+    if(isShelf){
+      cg=`<colgroup><col style="width:${shelfW};"><col style="width:auto;"><col style="width:${pkgW};"></colgroup>`;
+    }else{
+      cg=`<colgroup><col style="width:auto;"><col style="width:${pkgW};"><col style="width:${shelfW};"></colgroup>`;
+    }
+
+    const headHtml=`<thead><tr style="height:${HEAD_PX}px;">
+      ${hs.map(h=>`<th style="font-size:${headSize};white-space:nowrap;overflow:hidden;padding:2px 4px;">${h}</th>`).join('')}
+    </tr></thead>`;
+
     function makeRow(r,i){
       const[c1,c2,c3]=isShelf?[r.sd,r.name,r.pkg]:[r.name,r.pkg,r.sd];
-      return`<tr style="height:${ROW_H}px;max-height:${ROW_H}px;overflow:hidden;">
-        <td class="cs" style="height:${ROW_H}px;overflow:hidden;">${c1}</td>
-        <td class="cn" style="height:${ROW_H}px;overflow:hidden;">${c2}</td>
-        <td class="cp" style="height:${ROW_H}px;overflow:hidden;">${c3}</td>
+      // 各セルの高さをROW_PXに固定、overflow:hiddenではみ出しカット
+      const tdStyle=`height:${ROW_PX}px;max-height:${ROW_PX}px;overflow:hidden;padding:1px 4px;font-size:${fontSize};vertical-align:middle;`;
+      return`<tr style="height:${ROW_PX}px;max-height:${ROW_PX}px;">
+        <td class="cs" style="${tdStyle}white-space:nowrap;">${c1}</td>
+        <td class="cn" style="${tdStyle}word-break:break-all;">${c2}</td>
+        <td class="cp" style="${tdStyle}text-align:center;white-space:normal;">${c3}</td>
       </tr>`;
     }
 
     if(nc===1){
-      return`<table class="dt" style="table-layout:fixed;">${cg}${headHtml}<tbody>${rowArr.map(makeRow).join('')}</tbody></table>`;
+      return`<table class="dt" style="width:100%;table-layout:fixed;">${cg}${headHtml}<tbody>${rowArr.map(makeRow).join('')}</tbody></table>`;
     }
 
     // ページ単位段組み
@@ -397,18 +426,24 @@ function doPrint(rows,order){
         const segStart = pageStart + c * rowsPerPage;
         const seg = rowArr.slice(segStart, segStart + rowsPerPage);
         const trs = seg.map(makeRow).join('');
-        const border = c > 0 ? 'border-left:5px solid #f4f4f4;' : '';
-        segHtml += `<td style="width:${100/nc}%;vertical-align:top;padding:0;${border}">`;
+        const border = c > 0 ? 'border-left:4px solid #f0f0f0;' : '';
+        // 各段の高さを固定：HEAD_PX + ROW_PX × rowsPerPage
+        const colH = HEAD_PX + ROW_PX * rowsPerPage;
+        segHtml += `<td style="width:${100/nc}%;vertical-align:top;padding:0;${border}height:${colH}px;overflow:hidden;">`;
         if(seg.length > 0){
           segHtml += `<table class="dt" style="width:100%;table-layout:fixed;">${cg}${headHtml}<tbody>${trs}</tbody></table>`;
         }
         segHtml += `</td>`;
       }
 
-      // ページ高さ固定：HEADER_H(見出し) + ROW_H×rowsPerPage
-      const pageH = HEADER_H + ROW_H * rowsPerPage;
-      html += `<div style="height:${pageH}px;overflow:hidden;${p>0?'page-break-before:always;break-before:page;':''}" class="ppage">
-        <table style="width:100%;border-collapse:collapse;table-layout:fixed;"><tbody><tr>${segHtml}</tr></tbody></table>
+      // ページの高さを固定（HEAD_PX + ROW_PX × rowsPerPage）
+      const pageH_px = HEAD_PX + ROW_PX * rowsPerPage;
+      // ページ間の区切りは高さ0のdivでpage-breakを確実に発動
+      const breaker = p > 0 ? `<div style="height:0;page-break-before:always;break-before:page;"></div>` : '';
+      html += `${breaker}<div style="height:${pageH_px}px;overflow:hidden;">
+        <table style="width:100%;border-collapse:collapse;table-layout:fixed;height:${pageH_px}px;">
+          <tbody><tr>${segHtml}</tr></tbody>
+        </table>
       </div>`;
     }
     return html;
@@ -419,44 +454,62 @@ function doPrint(rows,order){
   else{
     const g={};rows.forEach(r=>{const gg=kg(r.name);if(!g[gg])g[gg]=[];g[gg].push(r);});
     GO.filter(x=>g[x]).forEach((x,i)=>{
-      body+=`<div class="${i>0?'pb':''}"><div class="kh">${x}</div>${buildTable(g[x],false)}</div>`;
+      const breaker = i > 0 ? `<div style="height:0;page-break-before:always;break-before:page;"></div>` : '';
+      body+=`${breaker}<div class="kh-wrap"><div class="kh">${x}</div>${buildTable(g[x],false)}</div>`;
     });
   }
 
   const html=`<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8"><title>棚表</title>
-<style>@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
-*{box-sizing:border-box;margin:0;padding:0;}body{font-family:'Noto Sans JP',sans-serif;background:#fff;color:#1a1a1a;}
-.cover{width:${W};min-height:${H};display:flex;flex-direction:column;align-items:center;justify-content:center;page-break-after:always;position:relative;overflow:hidden;}
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Noto Sans JP',sans-serif;background:#fff;color:#1a1a1a;}
+.cover{width:${W};min-height:${H};display:flex;flex-direction:column;align-items:center;justify-content:center;page-break-after:always;break-after:page;position:relative;overflow:hidden;}
 .ct{position:absolute;top:0;left:0;right:0;height:6px;background:${acc};}
 .cb{position:absolute;bottom:0;left:0;right:0;height:6px;background:${acc};}
-.cs2{position:absolute;top:0;bottom:0;right:0;width:48px;background:${aLight};}
+.cs2{position:absolute;top:0;bottom:0;right:0;width:40px;background:${aLight};}
 .cen{text-align:center;}
 .csub{font-size:10pt;font-weight:500;color:${acc};letter-spacing:.15em;margin-bottom:18mm;}
 .ctitle{font-size:38pt;font-weight:700;letter-spacing:.08em;margin-bottom:6mm;}
 .cbar{width:36mm;height:2.5px;background:${acc};margin:0 auto 8mm;}
 .cph{font-size:17pt;font-weight:500;color:#222;margin-bottom:4mm;}
 .cdate{font-size:10pt;color:#888;}
-.ccount{font-size:10pt;color:${acc};font-weight:500;margin-top:5mm;letter-spacing:.05em;}
-.bp2{width:${W};padding:${isLand?'10mm 14mm':'12mm 14mm'};padding-bottom:10mm;}
-.ph2{display:flex;align-items:center;justify-content:space-between;border-bottom:2.5px solid ${acc};padding-bottom:5px;margin-bottom:10px;}
-.ph2t{font-size:13pt;font-weight:700;color:${acc};}.ph2s{font-size:9pt;color:#999;}
-.kh{font-size:11pt;font-weight:700;color:#fff;background:${acc};padding:3px 12px;border-radius:3px;display:inline-block;margin:10px 0 5px;}
-.dt{width:100%;border-collapse:collapse;font-size:${isLand?(nc>=3?'7.5pt':'8.5pt'):(nc>=3?'7.5pt':'9pt')};}
-.dt thead th{background:${acc};color:#fff;font-weight:500;padding:5px 7px;text-align:left;}
-.dt thead th:last-child{text-align:center;}
-.dt tbody td{padding:${nc>=3?'3px 6px':'4px 7px'};border-bottom:.5px solid #ebebeb;vertical-align:middle;line-height:1.35;}
-.dt tbody .ev td{background:${aLight};}
-.cs{font-weight:500;color:${acc};white-space:nowrap;font-size:.9em;width:1%;}
-.cn{width:auto;min-width:0;word-break:break-all;}
-.cp{white-space:normal;color:#666;font-size:.72em;text-align:center;width:1%;min-width:28pt;max-width:44pt;word-break:break-all;line-height:1.2;}
-.dv{width:5px;background:#f2f2f2;border:none!important;}
-.pb{page-break-before:always;padding-top:${isLand?'10mm':'12mm'}.pg{page-break-before:always;padding-top:${isLand?'10mm':'12mm'};}
-.print-page{width:${W};height:${H};overflow:hidden;display:block;position:relative;}.print-page+.print-page{margin-top:0;}@media print{@page{size:${W} ${H};margin:0;}body{margin:0;}.ppage{page-break-inside:avoid;overflow:hidden;}.ppage+.ppage{page-break-before:always;break-before:page;}.pb{page-break-before:always;break-before:page;}.dt tbody tr{page-break-inside:avoid;}tr{height:${ROW_H}px;max-height:${ROW_H}px;}}
+.ccount{font-size:10pt;color:${acc};font-weight:500;margin-top:5mm;}
+.bp2{width:${W};padding:12mm 14mm 10mm;}
+.ph2{display:flex;align-items:center;justify-content:space-between;border-bottom:2.5px solid ${acc};padding-bottom:4px;margin-bottom:8px;}
+.ph2t{font-size:11pt;font-weight:700;color:${acc};}
+.ph2s{font-size:8pt;color:#999;}
+.kh{font-size:9pt;font-weight:700;color:#fff;background:${acc};padding:2px 10px;border-radius:3px;display:inline-block;margin-bottom:4px;}
+.dt{width:100%;border-collapse:collapse;}
+.dt thead th{background:${acc};color:#fff;font-weight:500;padding:2px 4px;text-align:left;overflow:hidden;white-space:nowrap;}
+.dt tbody td{border-bottom:.5px solid #ebebeb;vertical-align:middle;line-height:1.2;}
+.dt tbody tr:nth-child(even) td{background:${aLight};}
+.cs{font-weight:500;color:${acc};}
+@media print{
+  @page{size:${W} ${H};margin:12mm 14mm 10mm;}
+  body{margin:0;}
+  .cover{page-break-after:always;break-after:page;}
+  .dt tbody tr{page-break-inside:avoid;break-inside:avoid;}
+}
 </style></head><body>
-<div class="cover"><div class="ct"></div><div class="cb"></div><div class="cs2"></div>
-<div class="cen"><div class="csub">PHARMACY SHELF LIST</div><div class="ctitle">棚　表</div><div class="cbar"></div><div class="cph">${ph||'&nbsp;'}</div><div class="cdate">作成日：${today}</div><div class="ccount">収載医薬品数：${drugCount}品目</div></div></div>
-<div class="bp2"><div class="ph2"><div class="ph2t">${order==='shelf'?'棚番号順':'五十音順'}</div><div class="ph2s">${ph}</div></div>${body}</div>
-<script>window.onload=()=>window.print();<\/script></body></html>`;
+<div class="cover">
+  <div class="ct"></div><div class="cb"></div><div class="cs2"></div>
+  <div class="cen">
+    <div class="csub">PHARMACY SHELF LIST</div>
+    <div class="ctitle">棚　表</div>
+    <div class="cbar"></div>
+    <div class="cph">${ph||'&nbsp;'}</div>
+    <div class="cdate">作成日：${today}</div>
+    <div class="ccount">収載医薬品数：${drugCount}品目</div>
+  </div>
+</div>
+<div class="bp2">
+  <div class="ph2"><div class="ph2t">${order==='shelf'?'棚番号順':'五十音順'}</div><div class="ph2s">${ph}</div></div>
+  ${body}
+</div>
+<script>window.onload=()=>window.print();<\/script>
+</body></html>`;
+
   const w=window.open('','_blank');w.document.write(html);w.document.close();
   msg('印刷プレビューを開きました','ok');
 }
