@@ -89,7 +89,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','N
 
   <div class="step hidden" id="sP">
     <div class="sl">② プレビュー（先頭8行）</div>
-    <div class="card"><div class="pw"><table class="pt" id="pt"></table></div></div>
+    <div class="card">
+        <div class="pw"><table class="pt" id="pt"></table></div>
+        <div style="margin-top:10px;display:flex;align-items:center;gap:10px;">
+          <label style="font-size:12px;color:#666;white-space:nowrap;">ヘッダー行：</label>
+          <select id="headerRow" style="font-size:12px;padding:5px 8px;border:1px solid #ddd;border-radius:6px;background:#fff;" onchange="reloadWithHeader()">
+            <option value="0">1行目（デフォルト）</option>
+            <option value="1">2行目</option>
+            <option value="2">3行目</option>
+            <option value="3">4行目</option>
+            <option value="4">5行目</option>
+          </select>
+          <span style="font-size:11px;color:#aaa;">列名が正しく表示されない場合に変更してください</span>
+        </div>
+      </div>
   </div>
 
   <div class="step hidden" id="sM">
@@ -185,10 +198,22 @@ uz.addEventListener('dragleave',()=>uz.style.background='');
 uz.addEventListener('drop',e=>{e.preventDefault();uz.style.background='';if(e.dataTransfer.files[0])load(e.dataTransfer.files[0]);});
 fi.addEventListener('change',e=>{if(e.target.files[0])load(e.target.files[0]);});
 
+let rawJson=[];
+function reloadWithHeader(){
+  if(rawJson.length===0)return;
+  const hi=parseInt(document.getElementById('headerRow').value)||0;
+  hdrs=rawJson[hi].map((h,i)=>h?String(h):cl(i));
+  data=rawJson.slice(hi+1).filter(r=>r.some(c=>c!==''));
+  prev(rawJson,hi);
+  popMap();
+}
 function renderData(j){
   if(j.length<2){msg('データが少なすぎます','err');return;}
-  hdrs=j[0].map((h,i)=>h?String(h):cl(i));
-  data=j.slice(1).filter(r=>r.some(c=>c!==''));
+  rawJson=j;
+  document.getElementById('headerRow').value='0';
+  const hi=0;
+  hdrs=j[hi].map((h,i)=>h?String(h):cl(i));
+  data=j.slice(hi+1).filter(r=>r.some(c=>c!==''));
   document.getElementById('uz').classList.add('hidden');
   const flEl=document.getElementById('fl');
   flEl.classList.remove('hidden');
@@ -240,10 +265,12 @@ function load(f){
 
 function cl(i){let s='';i++;while(i>0){s=String.fromCharCode(64+(i%26||26))+s;i=Math.floor((i-1)/26);}return s;}
 
-function prev(j){
+function prev(j,hi){
+  hi=hi||0;
   const t=document.getElementById('pt');
-  t.innerHTML='<thead><tr>'+hdrs.map(h=>`<th>${h}</th>`).join('')+'</tr></thead><tbody>'+
-    j.slice(1,9).map(r=>'<tr>'+hdrs.map((_,i)=>`<td>${String(r[i]||'').substring(0,15)}</td>`).join('')+'</tr>').join('')+'</tbody>';
+  const headerRow=j[hi]||[];
+  t.innerHTML='<thead><tr>'+headerRow.map(h=>`<th>${String(h||'')}</th>`).join('')+'</tr></thead><tbody>'+
+    j.slice(hi+1,hi+9).map(r=>'<tr>'+headerRow.map((_,i)=>`<td>${String(r[i]||'').substring(0,15)}</td>`).join('')+'</tr>').join('')+'</tbody>';
 }
 
 function popMap(){
