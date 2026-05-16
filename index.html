@@ -141,6 +141,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Kaku Gothic ProN','N
         <div class="si"><label>段組み</label>
           <select id="nc"><option value="1">1段</option><option value="2" selected>2段</option><option value="3">3段</option><option value="4">4段</option></select>
         </div>
+        <div class="si"><label>行の高さ</label>
+          <select id="rowSize">
+            <option value="L">大（ゆったり）</option>
+            <option value="M" selected>中（標準）</option>
+            <option value="S">小（コンパクト）</option>
+          </select>
+        </div>
         <div class="si"><label>出力形式</label>
           <select id="of"><option value="print">ブラウザ印刷（推奨）</option><option value="xlsx">Excel (.xlsx)</option><option value="docx">Word (.docx)</option></select>
         </div>
@@ -341,6 +348,7 @@ gb.addEventListener('click',()=>{
 function doPrint(rows,order){
   const ph=document.getElementById('ph').value||'',today=new Date().toLocaleDateString('ja-JP',{year:'numeric',month:'long',day:'numeric'});
   const nc=parseInt(document.getElementById('nc').value),isLand=orient==='landscape';
+  const rowSize=document.getElementById('rowSize').value; // L/M/S
 
   // 用紙サイズ(mm)
   const paperSize=document.getElementById('paperSize').value;
@@ -348,101 +356,93 @@ function doPrint(rows,order){
   const [pw,ph2]=paperDims[paperSize]||[210,297];
   const W=(isLand?ph2:pw)+'mm', H=(isLand?pw:ph2)+'mm';
   const aLight=acc+'1A';
-
-  // ユニーク医薬品数
   const drugCount=new Set(rows.map(r=>r.name)).size;
 
-  // ===== 行高さ固定の核心 =====
-  // Chromeの印刷は 96px = 1インチ = 25.4mm
-  // 1px = 25.4/96 mm = 0.2646mm
-  // 1mm = 96/25.4 px = 3.7795px
-  const MM2PX = 3.7795;
+  const MM2PX=3.7795;
+  const pageH_mm=isLand?pw:ph2;
 
-  // 本文エリアの高さ(mm)：表紙ヘッダー(15mm) + 上下余白(22mm) を除く
-  const pageW_mm = isLand ? ph2 : pw;
-  const pageH_mm = isLand ? pw : ph2;
-  const bodyH_mm = pageH_mm - 38; // 上余白12+ページヘッダー15+下余白11
+  // 行の高さ(mm)：大中小 × 段数
+  // 文字は1行に必ず収まるように設定。折り返しは行わない。
+  const ROW_TABLE = {
+    L: { 1:8.0, 2:7.0, 3:6.0, 4:5.5 },
+    M: { 1:6.5, 2:5.5, 3:4.8, 4:4.2 },
+    S: { 1:5.0, 2:4.2, 3:3.8, 4:3.4 },
+  };
+  const ROW_MM = ROW_TABLE[rowSize][nc] || 5.5;
+  const ROW_PX = Math.round(ROW_MM * MM2PX);
 
-  // 1行の高さ(mm)：段数に関わらず固定。包装単位が改行しても収まる高さ
-  const ROW_MM = nc >= 3 ? 5.5 : nc >= 2 ? 6.0 : 7.0;
-  const ROW_PX = Math.round(ROW_MM * MM2PX); // px換算
+  // フォントサイズ(pt)：行高さに合わせてスケール
+  // 行高さ(mm) × 0.55 ≒ 適切なフォントサイズ(pt)
+  const FONT_PT = Math.max(5.0, (ROW_MM * 0.55)).toFixed(1);
+  const HEAD_PT = Math.max(5.0, (ROW_MM * 0.50)).toFixed(1);
 
-  // theadの高さ(mm)
-  const HEAD_MM = 7;
+  // ヘッダー行高さ
+  const HEAD_MM = ROW_MM * 1.3;
   const HEAD_PX = Math.round(HEAD_MM * MM2PX);
 
-  // 1ページあたりの行数
-  const rowsPerPage = Math.max(5, Math.floor((bodyH_mm - HEAD_MM) / ROW_MM));
+  // 本文エリア高さ（余白・ページヘッダー除く）
+  const bodyH_mm = pageH_mm - 38;
+  const rowsPerPage = Math.max(3, Math.floor((bodyH_mm - HEAD_MM) / ROW_MM));
 
-  // 棚番号・包装単位の最低幅(mm)
-  const shelfW_mm = nc >= 3 ? 14 : nc >= 2 ? 16 : 20;
-  const pkgW_mm   = nc >= 3 ? 12 : nc >= 2 ? 14 : 18;
-  const shelfW = shelfW_mm + 'mm';
-  const pkgW   = pkgW_mm   + 'mm';
-
-  // フォントサイズ(pt)
-  const fontSize = nc >= 3 ? '6.5pt' : nc >= 2 ? '7.5pt' : '9pt';
-  const headSize = nc >= 3 ? '6pt'   : nc >= 2 ? '7pt'   : '8.5pt';
+  // 列幅(mm)：段数に応じて調整
+  const shelfW = (nc>=3?13:nc>=2?15:20)+'mm';
+  const pkgW   = (nc>=3?11:nc>=2?13:17)+'mm';
 
   function buildTable(rowArr,isShelf){
     const hs=isShelf?['棚番号','医薬品名','包装単位']:['医薬品名','包装単位','棚番号'];
-
-    // colgroup で列幅を厳密に指定
     let cg;
     if(isShelf){
-      cg=`<colgroup><col style="width:${shelfW};"><col style="width:auto;"><col style="width:${pkgW};"></colgroup>`;
+      cg=`<colgroup><col style="width:${shelfW};"><col><col style="width:${pkgW};"></colgroup>`;
     }else{
-      cg=`<colgroup><col style="width:auto;"><col style="width:${pkgW};"><col style="width:${shelfW};"></colgroup>`;
+      cg=`<colgroup><col><col style="width:${pkgW};"><col style="width:${shelfW};"></colgroup>`;
     }
 
-    const headHtml=`<thead><tr style="height:${HEAD_PX}px;">
-      ${hs.map(h=>`<th style="font-size:${headSize};white-space:nowrap;overflow:hidden;padding:2px 4px;">${h}</th>`).join('')}
+    // thead：文字縮小・1行に収める
+    const headHtml=`<thead><tr style="height:${HEAD_PX}px;line-height:1;">
+      ${hs.map(h=>`<th style="font-size:${HEAD_PT}pt;white-space:nowrap;overflow:hidden;padding:1px 3px;height:${HEAD_PX}px;">${h}</th>`).join('')}
     </tr></thead>`;
 
     function makeRow(r,i){
       const[c1,c2,c3]=isShelf?[r.sd,r.name,r.pkg]:[r.name,r.pkg,r.sd];
-      // 各セルの高さをROW_PXに固定、overflow:hiddenではみ出しカット
-      const tdStyle=`height:${ROW_PX}px;max-height:${ROW_PX}px;overflow:hidden;padding:1px 4px;font-size:${fontSize};vertical-align:middle;`;
+      // white-space:nowrap + overflow:hidden + font-sizeで1行に収める
+      // word-breakしない → 文字が小さくなっても1行確定
+      const base=`height:${ROW_PX}px;max-height:${ROW_PX}px;overflow:hidden;padding:0 3px;font-size:${FONT_PT}pt;white-space:nowrap;vertical-align:middle;line-height:1;`;
+      const even=i%2?`background:${aLight};`:'';
       return`<tr style="height:${ROW_PX}px;max-height:${ROW_PX}px;">
-        <td class="cs" style="${tdStyle}white-space:nowrap;">${c1}</td>
-        <td class="cn" style="${tdStyle}word-break:break-all;">${c2}</td>
-        <td class="cp" style="${tdStyle}text-align:center;white-space:normal;">${c3}</td>
+        <td style="${base}${even}font-weight:500;color:${acc};">${c1}</td>
+        <td style="${base}${even}">${c2}</td>
+        <td style="${base}${even}text-align:center;">${c3}</td>
       </tr>`;
     }
 
     if(nc===1){
-      return`<table class="dt" style="width:100%;table-layout:fixed;">${cg}${headHtml}<tbody>${rowArr.map(makeRow).join('')}</tbody></table>`;
+      return`<table style="width:100%;border-collapse:collapse;table-layout:fixed;">${cg}${headHtml}<tbody>${rowArr.map(makeRow).join('')}</tbody></table>`;
     }
 
     // ページ単位段組み
-    const perPage = rowsPerPage * nc;
-    const totalPages = Math.ceil(rowArr.length / perPage);
-    let html = '';
+    const perPage=rowsPerPage*nc;
+    const totalPages=Math.ceil(rowArr.length/perPage);
+    let html='';
+    const pageH_px=HEAD_PX+ROW_PX*rowsPerPage;
 
-    for(let p = 0; p < totalPages; p++){
-      const pageStart = p * perPage;
-      let segHtml = '';
-      for(let c = 0; c < nc; c++){
-        const segStart = pageStart + c * rowsPerPage;
-        const seg = rowArr.slice(segStart, segStart + rowsPerPage);
-        const trs = seg.map(makeRow).join('');
-        const border = c > 0 ? 'border-left:4px solid #f0f0f0;' : '';
-        // 各段の高さを固定：HEAD_PX + ROW_PX × rowsPerPage
-        const colH = HEAD_PX + ROW_PX * rowsPerPage;
-        segHtml += `<td style="width:${100/nc}%;vertical-align:top;padding:0;${border}height:${colH}px;overflow:hidden;">`;
-        if(seg.length > 0){
-          segHtml += `<table class="dt" style="width:100%;table-layout:fixed;">${cg}${headHtml}<tbody>${trs}</tbody></table>`;
+    for(let p=0;p<totalPages;p++){
+      const pageStart=p*perPage;
+      let segHtml='';
+      for(let c=0;c<nc;c++){
+        const seg=rowArr.slice(pageStart+c*rowsPerPage, pageStart+c*rowsPerPage+rowsPerPage);
+        const trs=seg.map(makeRow).join('');
+        const border=c>0?'border-left:4px solid #f0f0f0;':'';
+        segHtml+=`<td style="width:${100/nc}%;vertical-align:top;padding:0;${border}height:${pageH_px}px;overflow:hidden;">`;
+        if(seg.length>0){
+          segHtml+=`<table style="width:100%;border-collapse:collapse;table-layout:fixed;">${cg}${headHtml}<tbody>${trs}</tbody></table>`;
         }
-        segHtml += `</td>`;
+        segHtml+=`</td>`;
       }
-
-      // ページの高さを固定（HEAD_PX + ROW_PX × rowsPerPage）
-      const pageH_px = HEAD_PX + ROW_PX * rowsPerPage;
-      // ページ間の区切りは高さ0のdivでpage-breakを確実に発動
-      const breaker = p > 0 ? `<div style="height:0;page-break-before:always;break-before:page;"></div>` : '';
-      html += `${breaker}<div style="height:${pageH_px}px;overflow:hidden;">
+      // ページ間：高さ0の改ページdivを物理挿入
+      const breaker=p>0?`<div style="height:0;line-height:0;font-size:0;page-break-before:always;break-before:page;"></div>`:'';
+      html+=`${breaker}<div style="height:${pageH_px}px;overflow:hidden;">
         <table style="width:100%;border-collapse:collapse;table-layout:fixed;height:${pageH_px}px;">
-          <tbody><tr>${segHtml}</tr></tbody>
+          <tbody><tr style="height:${pageH_px}px;">${segHtml}</tr></tbody>
         </table>
       </div>`;
     }
@@ -450,12 +450,13 @@ function doPrint(rows,order){
   }
 
   let body='';
-  if(order==='shelf'){body=buildTable(rows,true);}
-  else{
+  if(order==='shelf'){
+    body=buildTable(rows,true);
+  }else{
     const g={};rows.forEach(r=>{const gg=kg(r.name);if(!g[gg])g[gg]=[];g[gg].push(r);});
     GO.filter(x=>g[x]).forEach((x,i)=>{
-      const breaker = i > 0 ? `<div style="height:0;page-break-before:always;break-before:page;"></div>` : '';
-      body+=`${breaker}<div class="kh-wrap"><div class="kh">${x}</div>${buildTable(g[x],false)}</div>`;
+      const breaker=i>0?`<div style="height:0;line-height:0;font-size:0;page-break-before:always;break-before:page;"></div>`:'';
+      body+=`${breaker}<div><div style="font-size:9pt;font-weight:700;color:#fff;background:${acc};padding:2px 10px;border-radius:3px;display:inline-block;margin-bottom:4px;">${x}</div>${buildTable(g[x],false)}</div>`;
     });
   }
 
@@ -464,6 +465,7 @@ function doPrint(rows,order){
 @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+JP:wght@400;500;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0;}
 body{font-family:'Noto Sans JP',sans-serif;background:#fff;color:#1a1a1a;}
+table{border-collapse:collapse;}
 .cover{width:${W};min-height:${H};display:flex;flex-direction:column;align-items:center;justify-content:center;page-break-after:always;break-after:page;position:relative;overflow:hidden;}
 .ct{position:absolute;top:0;left:0;right:0;height:6px;background:${acc};}
 .cb{position:absolute;bottom:0;left:0;right:0;height:6px;background:${acc};}
@@ -479,17 +481,10 @@ body{font-family:'Noto Sans JP',sans-serif;background:#fff;color:#1a1a1a;}
 .ph2{display:flex;align-items:center;justify-content:space-between;border-bottom:2.5px solid ${acc};padding-bottom:4px;margin-bottom:8px;}
 .ph2t{font-size:11pt;font-weight:700;color:${acc};}
 .ph2s{font-size:8pt;color:#999;}
-.kh{font-size:9pt;font-weight:700;color:#fff;background:${acc};padding:2px 10px;border-radius:3px;display:inline-block;margin-bottom:4px;}
-.dt{width:100%;border-collapse:collapse;}
-.dt thead th{background:${acc};color:#fff;font-weight:500;padding:2px 4px;text-align:left;overflow:hidden;white-space:nowrap;}
-.dt tbody td{border-bottom:.5px solid #ebebeb;vertical-align:middle;line-height:1.2;}
-.dt tbody tr:nth-child(even) td{background:${aLight};}
-.cs{font-weight:500;color:${acc};}
 @media print{
-  @page{size:${W} ${H};margin:12mm 14mm 10mm;}
+  @page{size:${W} ${H};margin:0;}
   body{margin:0;}
   .cover{page-break-after:always;break-after:page;}
-  .dt tbody tr{page-break-inside:avoid;break-inside:avoid;}
 }
 </style></head><body>
 <div class="cover">
