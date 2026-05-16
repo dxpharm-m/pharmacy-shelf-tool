@@ -269,12 +269,21 @@ function prev(j,hi){
   hi=hi||0;
   const t=document.getElementById('pt');
   const headerRow=j[hi]||[];
-  t.innerHTML='<thead><tr>'+headerRow.map(h=>`<th>${String(h||'')}</th>`).join('')+'</tr></thead><tbody>'+
-    j.slice(hi+1,hi+9).map(r=>'<tr>'+headerRow.map((_,i)=>`<td>${String(r[i]||'').substring(0,15)}</td>`).join('')+'</tr>').join('')+'</tbody>';
+  const colCount=headerRow.length;
+  // A・B・C…の列番号行（固定）
+  const colLetterRow='<tr style="background:#eef2ff;">'+
+    Array.from({length:colCount},(_,i)=>`<th style="color:#4a6cf7;font-weight:700;font-size:11px;text-align:center;padding:3px 8px;">${cl(i)}</th>`).join('')+'</tr>';
+  // ヘッダー行
+  const headerHtml='<tr style="background:#f7f7f5;">'+
+    headerRow.map(h=>`<th style="color:#444;font-weight:500;">${String(h||'')}</th>`).join('')+'</tr>';
+  // データ行
+  const dataHtml=j.slice(hi+1,hi+8).map(r=>'<tr>'+
+    headerRow.map((_,i)=>`<td>${String(r[i]||'').substring(0,15)}</td>`).join('')+'</tr>').join('');
+  t.innerHTML=`<thead>${colLetterRow}${headerHtml}</thead><tbody>${dataHtml}</tbody>`;
 }
 
 function popMap(){
-  const opt=(ex='')=>ex+hdrs.map((h,i)=>`<option value="${i}">${cl(i)}: ${h}</option>`).join('');
+  const opt=(ex='')=>ex+hdrs.map((h,i)=>`<option value="${i}">${cl(i)}列　${h}</option>`).join('');
   ['mJ','mN'].forEach(id=>document.getElementById(id).innerHTML='<option value="">選択してください</option>'+opt());
   ['mP','mS2','mS3'].forEach(id=>document.getElementById(id).innerHTML='<option value="">なし</option>'+opt());
   document.getElementById('mS1').innerHTML='<option value="">選択してください</option>'+opt();
